@@ -1,7 +1,6 @@
 use std::error::Error;
 use std::net::SocketAddr;
 use tokio::net::UdpSocket;
-use std::str;
 pub struct Configuration {
 	local_address: SocketAddr,
 	remote_address: SocketAddr
@@ -37,18 +36,12 @@ impl Adrenaline {
 			configuration: config
 		}
 	}
-	pub async fn serve(&self, callback: fn(message: &str))  {
+	pub async fn serve(&self, callback: fn(message: [u8; 1024], len: usize))  {
 		let socket = UdpSocket::bind(&self.configuration.local_address).await.unwrap();
 		let mut buf = [0; 1024];
 		loop {
 			let (len, addr) = socket.recv_from(&mut buf).await.unwrap();
-			let message = str::from_utf8(&buf[..len]);
-			match message {
-				Ok(x) => {
-					callback(x);
-				},
-				Err(e) => {}
-			}
+			callback(buf, len);
 		}
 	}
 	pub async fn send_string(&self,payload: &str) -> Result<Option<Vec<u8>>,Box<dyn Error>> {
