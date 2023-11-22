@@ -1,6 +1,12 @@
 use std::error::Error;
 use std::net::SocketAddr;
+use std::sync::{Arc, mpsc};
 use tokio::net::UdpSocket;
+use timer;
+use std::time::{Duration, Instant, SystemTime};
+use std::sync::mpsc::{Sender, Receiver};
+use std::thread::sleep;
+
 pub struct Configuration {
 	local_address: SocketAddr,
 	remote_address: SocketAddr
@@ -27,21 +33,56 @@ impl Configuration {
 	}
 }
 pub struct Adrenaline {
-	configuration: Configuration
+	configuration: Configuration,
+	tps: Arc<i32>
 }
 
 impl Adrenaline {
 	pub fn new(config: Configuration) -> Self {
 		Self {
-			configuration: config
+			configuration: config,
+			tps: Arc::new(0)
 		}
 	}
+	pub fn get_tps(&self) -> Arc<i32> {
+		self.tps.clone()
+	}
 	pub async fn serve(&self, callback: fn(message: [u8; 1024], len: usize))  {
+		let (tx, rx): (Sender<i32>, Receiver<i32>) = mpsc::channel();
+		// run the timer on another thread
+		tokio::spawn(async move {
+
+			let mut start = SystemTime::now();
+			let mut rps_counter = 0;
+			loop {
+				let resp = rx.try_recv();
+				match resp {
+					Ok(x) => {
+						if x != 0 {
+							rps_counter += x;
+						}
+					},
+					Err(e) => {}
+				}
+
+				// get the number of transactions since the last tick
+				if rps_counter != 0 {
+					if start.elapsed().unwrap() >= Duration::from_secs(1) {
+						start = SystemTime::now();
+						rps_counter = 0;
+					}
+				}
+			}
+		});
+
 		let socket = UdpSocket::bind(&self.configuration.local_address).await.unwrap();
 		let mut buf = [0; 1024];
 		loop {
 			let (len, addr) = socket.recv_from(&mut buf).await.unwrap();
-			callback(buf, len);
+			tokio::spawn(async move {
+				callback(buf.clone(), len);
+			});
+			tx.send(1).unwrap();
 		}
 	}
 	pub async fn send_string(&self,payload: &str) -> Result<Option<Vec<u8>>,Box<dyn Error>> {
