@@ -1,17 +1,24 @@
 use std::time::{Duration, SystemTime};
-use adrenaline::{Adrenaline, Configuration};
+use log::warn;
+
 use tokio;
+
+use adrenaline::{Adrenaline, Configuration};
 
 #[tokio::main]
 async fn main() {
+	env_logger::init();
 	let ad = Adrenaline::new(Configuration::
 	new_with_remote_address("0.0.0.0:8080"));
 
-	let mut start = SystemTime::now();
-	loop {
-		if start.elapsed().unwrap() > Duration::from_secs(5) {
-			break
+	let response = ad.send_file("examples/test_file.txt".to_string()).await;
+	match response {
+		Ok(x) => {
+			println!("Message sent successfully!");
+		},
+		Err(e) => {
+			warn!("{}", e);
 		}
-		ad.send_string("Test").await;
 	}
+
 }

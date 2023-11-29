@@ -1,25 +1,18 @@
+use std::string;
+
 use adrenaline::{Adrenaline, Configuration};
 
 #[tokio::main]
 async fn main() {
+	env_logger::init();
 	let ad = Adrenaline::new(Configuration::new_with_local_address("0.0.0.0:8080"));
-	let rx = ad.serve_with_channel().await;
-	match rx {
-		Ok(x) => {
-			loop {
-				let received_packet = x.recv();
-				match received_packet {
-					Ok(y) => {
-						println!("{:?}", y.len);
-					}
-					Err(e) => {
-						println!("error {}", e);
-					}
-				}
-			}
-		},
-		Err(e) => {
-			panic!("{}",e);
+	ad.serve(|packet| {
+		let resp_string = string::String::from_utf8_lossy(&packet.bytes);
+		println!("Incoming packet from {}:{}",
+		         packet.remote_address.ip().to_string(), packet.remote_address.port());
+		if resp_string.contains("Test") {
+			return Some("OK".as_bytes().to_vec());
 		}
-	}
+		None
+	}).await;
 }
