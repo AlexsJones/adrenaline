@@ -110,18 +110,22 @@ impl Adrenaline {
 
 					match get_command_from_control_header(s.0) {
 						ControlCommand::START => {
+							info!("Found flow control Start");
 							self.buffer.clear();
 							self.buffer.push(inbound_packet);
 						}
 						ControlCommand::CONTINUE => {
+							info!("Found flow control Continue");
 							self.buffer.push(inbound_packet);
 						}
 						ControlCommand::SINGLE_UNIT => {
+							info!("Found flow control Single Unit");
 							self.buffer.clear();
 							self.buffer.push(inbound_packet);
 							create_file_from_packets(&self.buffer);
 						}
 						ControlCommand::END => {
+							info!("Found flow control End");
 							self.buffer.push(inbound_packet);
 							create_file_from_packets(&self.buffer);
 						}

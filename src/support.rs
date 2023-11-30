@@ -106,21 +106,16 @@ pub fn create_control_header(c: ControlCommand) -> [u8; MAX_USER_CONTROL_HEADER]
 pub fn get_command_from_control_header(input: &[u8]) -> ControlCommand {
 
 	if input == [0,0,0,0,0,0,0,1] {
-		info!("Found flow control START");
 		return ControlCommand::START
 	}
 	if input == [0,0,0,0,1,1,1,1] {
-		info!("Found flow control CONTINUE");
 		return ControlCommand::CONTINUE
 	}
 	if input == [0,0,0,1,1,1,1,1] {
-		info!("Found flow control SINGLE_UNIT");
 		return ControlCommand::SINGLE_UNIT
 	}
 	if input == [0,0,0,0,0,0,1,1] {
-		info!("Found flow control END");
 		return ControlCommand::END
 	}
-	info!("Found flow control Error");
 	ControlCommand::ERROR
 }
