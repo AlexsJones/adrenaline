@@ -3,7 +3,7 @@ mod support;
 use std::error::Error;
 use std::net::SocketAddr;
 
-use log::{debug, info, warn};
+use log::{debug, info};
 use tokio::net::UdpSocket;
 use crate::support::{ControlCommand, create_control_header, create_file_from_packets, get_chunks_from_file, get_command_from_control_header};
 
@@ -87,22 +87,22 @@ impl Adrenaline {
 
 	pub async fn serve(
 		&mut self,
-		callback: fn(packet: Packet) -> Option<Vec<u8>>,
+		_callback: fn(packet: Packet) -> Option<Vec<u8>>,
 	) {
 
 			let socket = self.new_udp_reuseport(self.configuration.local_address);
-			let shutdown_signal = self.configuration.is_shutting_down.clone();
+			let _shutdown_signal = self.configuration.is_shutting_down;
 
 				let mut buf = [0; support::MAX_DATAGRAM_SIZE];
 				loop {
-					let (len, addr) = socket.recv_from(&mut buf).await.unwrap();
+					let (len, _addr) = socket.recv_from(&mut buf).await.unwrap();
 					debug!("Received packet of length {}", len);
 					// Read the control_header
 					let s = buf.split_at(8);
 					let control_header = get_command_from_control_header(s.0);
 					// reconstruct into a packet
 					let inbound_packet = Packet {
-						control_header: control_header,
+						control_header,
 						bytes: s.1.to_vec(),
 						len: len - support::MAX_USER_CONTROL_HEADER,
 						remote_address: self.configuration.local_address,
@@ -131,7 +131,7 @@ impl Adrenaline {
 				}
 	}
 
-	async fn send_packet(&self, mut packet: Packet) -> Result<(), Box<dyn Error>> {
+	async fn send_packet(&self, packet: Packet) -> Result<(), Box<dyn Error>> {
 		let socket = UdpSocket::bind(self.configuration.local_address).await?;
 		socket.connect(&self.configuration.remote_address).await?;
 
@@ -187,11 +187,11 @@ impl Adrenaline {
 				self.send_packet(start_packet).await?;
 
 				for middle_chunk in x.chunks {
-					let len = middle_chunk.len().clone();
+					let len = middle_chunk.len();
 					let middle_packet = Packet{
 						control_header: ControlCommand::CONTINUE,
 						bytes: middle_chunk,
-						len: len,
+						len,
 						remote_address: self.configuration.remote_address,
 					};
 					self.send_packet(middle_packet).await?;

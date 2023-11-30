@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::io::{Read, Write};
 use std::io;
-use std::process::{Command, CommandArgs};
+
 use log::info;
 use crate::Packet;
 
@@ -32,7 +32,7 @@ pub struct FileChunkInfo {
 	pub chunks: Vec<Vec<u8>>
 }
 
-pub fn get_chunks_from_file(mut filename: String) -> Result<FileChunkInfo, io::Error> {
+pub fn get_chunks_from_file(filename: String) -> Result<FileChunkInfo, io::Error> {
 	let mut f = std::fs::File::open(filename)?;
 	let mut list_of_chunks = Vec::new();
 	let mut chunkInfo = FileChunkInfo{ size: 0, chunks: vec![] };
@@ -73,19 +73,19 @@ pub fn create_file_from_packets(packet: &Vec<Packet>) -> Result<(),Box<dyn Error
 pub fn create_control_header(c: ControlCommand) -> [u8; MAX_USER_CONTROL_HEADER] {
 	match c {
 		ControlCommand::START => {
-			return [0,0,0,0,0,0,0,1];
+			[0,0,0,0,0,0,0,1]
 		},
 		ControlCommand::CONTINUE => {
-			return [0,0,0,0,1,1,1,1];
+			[0,0,0,0,1,1,1,1]
 		},
 		ControlCommand::SINGLE_UNIT => {
-			return [0,0,0,1,1,1,1,1];
+			[0,0,0,1,1,1,1,1]
 		}
 		ControlCommand::END => {
-			return [0,0,0,0,0,0,1,1];
+			[0,0,0,0,0,0,1,1]
 		}
 		ControlCommand::ERROR => {
-			return [0,0,0,0,0,1,1,1];
+			[0,0,0,0,0,1,1,1]
 		}
 	}
 }
@@ -109,5 +109,5 @@ pub fn get_command_from_control_header(input: &[u8]) -> ControlCommand {
 		return ControlCommand::END
 	}
 	info!("Found flow control Error");
-	return ControlCommand::ERROR;
+	ControlCommand::ERROR
 }
