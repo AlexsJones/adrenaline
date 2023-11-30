@@ -5,7 +5,7 @@ use adrenaline::{Adrenaline, Configuration};
 #[tokio::main]
 async fn main() {
 	env_logger::init();
-	let ad = Adrenaline::new(Configuration::new_with_local_address("0.0.0.0:8080"));
+	let mut ad = Adrenaline::new(Configuration::new_with_local_address("0.0.0.0:8080"));
 	ad.serve(|packet| {
 		let resp_string = string::String::from_utf8_lossy(&packet.bytes);
 		println!("Incoming packet from {}:{}",

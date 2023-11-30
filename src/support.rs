@@ -1,8 +1,9 @@
-use std::io::Read;
+use std::error::Error;
+use std::io::{Read, Write};
 use std::io;
 use std::process::{Command, CommandArgs};
 use log::info;
-use enum_map;
+use crate::Packet;
 
 const UDP_HEADER: usize = 8;
 // 0,0,0,0,0,0,0,0 DEFAULT
@@ -32,12 +33,12 @@ pub struct FileChunkInfo {
 }
 
 pub fn get_chunks_from_file(mut filename: String) -> Result<FileChunkInfo, io::Error> {
-	let mut file = std::fs::File::open(filename)?;
+	let mut f = std::fs::File::open(filename)?;
 	let mut list_of_chunks = Vec::new();
 	let mut chunkInfo = FileChunkInfo{ size: 0, chunks: vec![] };
 	loop {
 		let mut chunk = Vec::with_capacity(MAX_CHUNK_SIZE);
-		let n = file.by_ref().take(MAX_CHUNK_SIZE as u64).read_to_end(&mut chunk)?;
+		let n = std::io::Read::by_ref(&mut f).take(MAX_CHUNK_SIZE as u64).read_to_end(&mut chunk)?;
 		chunkInfo.size += n;
 		if n == 0 {
 			break;
@@ -53,6 +54,20 @@ pub fn get_chunks_from_file(mut filename: String) -> Result<FileChunkInfo, io::E
 	}
 	chunkInfo.chunks = list_of_chunks.clone();
 	Ok(chunkInfo)
+}
+
+pub fn create_file_from_packets(packet: &Vec<Packet>) -> Result<(),Box<dyn Error>> {
+
+	let mut file_buffer_vec: Vec<u8> = vec![];
+
+	for p in packet {
+		file_buffer_vec.extend(p.bytes.clone());
+	}
+
+	let mut f = std::fs::File::create("output")?;
+	f.write_all(&file_buffer_vec)?;
+
+	Ok(())
 }
 
 pub fn create_control_header(c: ControlCommand) -> [u8; MAX_USER_CONTROL_HEADER] {

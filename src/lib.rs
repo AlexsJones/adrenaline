@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 
 use log::{debug, info, warn};
 use tokio::net::UdpSocket;
-use crate::support::{ControlCommand, create_control_header, get_chunks_from_file, get_command_from_control_header};
+use crate::support::{ControlCommand, create_control_header, create_file_from_packets, get_chunks_from_file, get_command_from_control_header};
 
 pub struct Configuration {
 	local_address: SocketAddr,
@@ -44,6 +44,7 @@ impl Configuration {
 pub struct Adrenaline {
 	configuration: Configuration,
 	cpu_count: usize,
+	buffer: Vec<Packet>
 }
 
 pub struct Packet {
@@ -62,6 +63,7 @@ impl Adrenaline {
 		Self {
 			configuration: config,
 			cpu_count: num_cpus,
+			buffer: vec![],
 		}
 	}
 	pub fn new_udp_reuseport(&self, local_addr: SocketAddr) -> UdpSocket {
@@ -84,14 +86,13 @@ impl Adrenaline {
 	}
 
 	pub async fn serve(
-		&self,
+		&mut self,
 		callback: fn(packet: Packet) -> Option<Vec<u8>>,
 	) {
-		let mut udp_tasks = vec![];
-		// for _i in 0..self.cpu_count {
+
 			let socket = self.new_udp_reuseport(self.configuration.local_address);
 			let shutdown_signal = self.configuration.is_shutting_down.clone();
-			 udp_tasks.push(tokio::spawn(async move {
+
 				let mut buf = [0; support::MAX_DATAGRAM_SIZE];
 				loop {
 					let (len, addr) = socket.recv_from(&mut buf).await.unwrap();
@@ -99,38 +100,35 @@ impl Adrenaline {
 					// Read the control_header
 					let s = buf.split_at(8);
 					let control_header = get_command_from_control_header(s.0);
-					// export the buffer
-
-					match callback(Packet {
+					// reconstruct into a packet
+					let inbound_packet = Packet {
 						control_header: control_header,
 						bytes: s.1.to_vec(),
-						len: len,
-			
-						remote_address: addr,
-					}) {
-						Some(_x) => {
-							let sent = socket.try_send_to(&buf[..len], addr);
-							match sent {
-								Ok(x) => {
-									info!("{} bytes sent to {}",x, addr.ip().to_string());
-								}
-								Err(_e) => {}
-							}
-						}
-						None => {}
-					}
-				}
-			}));
-		for task in udp_tasks {
-			task.await.unwrap()
-		}
-	}
+						len: len - support::MAX_USER_CONTROL_HEADER,
+						remote_address: self.configuration.local_address,
+					};
 
-	pub async fn send(&self, payload: Vec<u8>) -> Result<(), Box<dyn Error>> {
-		let socket = UdpSocket::bind(self.configuration.local_address).await?;
-		socket.connect(&self.configuration.remote_address).await?;
-		socket.send(payload.as_slice()).await?;
-		Ok(())
+					match get_command_from_control_header(s.0) {
+						ControlCommand::START => {
+							self.buffer.clear();
+							self.buffer.push(inbound_packet);
+						}
+						ControlCommand::CONTINUE => {
+							self.buffer.push(inbound_packet);
+						}
+						ControlCommand::SINGLE_UNIT => {
+							self.buffer.clear();
+							self.buffer.push(inbound_packet);
+							create_file_from_packets(&self.buffer);
+						}
+						ControlCommand::END => {
+							self.buffer.push(inbound_packet);
+							create_file_from_packets(&self.buffer);
+						}
+						ControlCommand::ERROR => {}
+					}
+
+				}
 	}
 
 	async fn send_packet(&self, mut packet: Packet) -> Result<(), Box<dyn Error>> {
@@ -151,7 +149,7 @@ impl Adrenaline {
 		let chunks = get_chunks_from_file(file_name);
 		match chunks {
 			Ok(mut x) => {
-				info!("Chunking into {} chunks of size {}", x.chunks.len(), support::MAX_CHUNK_SIZE);
+				info!("File size is {}, chunking into {} chunks of size {}",x.size, x.chunks.len(), support::MAX_CHUNK_SIZE);
 				// Create control header
 				// Cycle through all the chunks, create packets and assign their control headers...
 				if x.chunks.len() == 1 {
@@ -162,6 +160,7 @@ impl Adrenaline {
 						len: x.size,
 						remote_address: self.configuration.remote_address,
 					};
+
 					self.send_packet(send_packet).await?;
 					return Ok(())
 				}
@@ -220,7 +219,30 @@ impl Adrenaline {
 #[cfg(test)]
 mod tests {
 	use crate::{Adrenaline, Configuration};
+	use crate::support::get_chunks_from_file;
 
+	#[tokio::test]
+	async fn test_chunking_real_file() {
+		let chunks = get_chunks_from_file("examples/test_file.txt".to_string());
+		match chunks{
+			Ok(x) => {
+
+			}, Err(e) => {
+				assert!(false);
+			}
+		}
+	}
+	#[tokio::test]
+	async fn test_chunking_false_file() {
+		let chunks = get_chunks_from_file("examples/fake_file.txt".to_string());
+		match chunks{
+			Ok(x) => {
+				assert!(false);
+			}, Err(e) => {
+
+			}
+		}
+	}
 	#[tokio::test]
 	#[should_panic]
 	async fn test_local_address_not_parsed() {
