@@ -218,9 +218,28 @@ impl Adrenaline {
 
 #[cfg(test)]
 mod tests {
+	use std::io::Error;
 	use crate::{Adrenaline, Configuration};
-	use crate::support::get_chunks_from_file;
+	use crate::support::{create_file_from_chunks, get_chunks_from_file};
 
+	#[tokio::test]
+	async fn test_chunking_correctness() {
+		let chunks = get_chunks_from_file("examples/test_file_small.txt".to_string());
+		match chunks{
+			Ok(x) => {
+				match create_file_from_chunks("examples/output-test_chunking_correctness_test.txt", x) {
+					Ok(_) => {
+
+					}
+					Err(_) => {
+						assert!(false);
+					}
+				}
+			}, Err(e) => {
+				assert!(false);
+			}
+		}
+	}
 	#[tokio::test]
 	async fn test_chunking_real_file() {
 		let chunks = get_chunks_from_file("examples/test_file.txt".to_string());

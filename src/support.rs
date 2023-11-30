@@ -43,10 +43,7 @@ pub fn get_chunks_from_file(filename: String) -> Result<FileChunkInfo, io::Error
 		if n == 0 {
 			break;
 		}
-		//let start:usize = if list_of_chunks.len() != 0 { 0 } else { 0x20 }; // skip header
-		for i in 0..n {
-			chunk[i] = !chunk[i]; // neg
-		}
+
 		list_of_chunks.push(chunk);
 		if n < MAX_CHUNK_SIZE {
 			break;
@@ -54,6 +51,22 @@ pub fn get_chunks_from_file(filename: String) -> Result<FileChunkInfo, io::Error
 	}
 	chunkInfo.chunks = list_of_chunks.clone();
 	Ok(chunkInfo)
+}
+
+pub fn create_file_from_chunks(filename: &str, file_chunk_info: FileChunkInfo) -> Result<(), io::Error> {
+
+	let mut file_body = vec![];
+
+	for chunk in file_chunk_info.chunks {
+		for v in chunk {
+			file_body.push(v);
+		}
+	}
+
+	let mut f = std::fs::File::create(filename)?;
+	f.write_all(&file_body)?;
+
+	Ok(())
 }
 
 pub fn create_file_from_packets(packet: &Vec<Packet>) -> Result<(),Box<dyn Error>> {
