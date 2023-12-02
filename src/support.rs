@@ -1,8 +1,11 @@
 use std::error::Error;
+use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::io;
+use std::slice::Chunks;
+use chrono::Local;
 
-use log::info;
+use log::{debug, info};
 use crate::Packet;
 
 const UDP_HEADER: usize = 8;
@@ -23,10 +26,10 @@ pub enum ControlCommand {
 pub(crate) const MAX_USER_CONTROL_HEADER: usize = 8;
 const IP_HEADER: usize = 20;
 const AG_HEADER: usize = 4;
-const MAX_DATA_LENGTH: usize = (9216 - 1) - UDP_HEADER - IP_HEADER - MAX_USER_CONTROL_HEADER;
+pub(crate) const MAX_DATAGRAM_SIZE: usize = 9216;
+const MAX_DATA_LENGTH: usize = (MAX_DATAGRAM_SIZE - 1) - UDP_HEADER - IP_HEADER - MAX_USER_CONTROL_HEADER;
 pub const MAX_CHUNK_SIZE: usize = MAX_DATA_LENGTH - AG_HEADER;
 
-pub(crate) const MAX_DATAGRAM_SIZE: usize = 9216;
 pub struct FileChunkInfo {
 	pub size: usize,
 	pub chunks: Vec<Vec<u8>>
@@ -53,33 +56,54 @@ pub fn get_chunks_from_file(filename: String) -> Result<FileChunkInfo, io::Error
 	Ok(chunkInfo)
 }
 
-pub fn create_file_from_chunks(filename: &str, file_chunk_info: FileChunkInfo) -> Result<(), io::Error> {
+pub fn chunk_to_file(filename: &str, chunk: Vec<u8>)  -> Result<(), io::Error>{
+	let mut file = OpenOptions::new()
+		.append(true) // Set the append flag
+		.create(true) // Create the file if it does not exist
+		.open(filename)?;
 
-	let mut file_body = vec![];
-
-	for chunk in file_chunk_info.chunks {
-		for v in chunk {
-			file_body.push(v);
-		}
-	}
-
-	let mut f = std::fs::File::create(filename)?;
-	f.write_all(&file_body)?;
-
+	writeln!(file, "{:?}\n\n\n", chunk)?;
 	Ok(())
 }
 
-pub fn create_file_from_packets(packet: &Vec<Packet>) -> Result<(),Box<dyn Error>> {
+fn find_eight_consecutive_nulls(data: &Vec<u8>) -> Option<usize> {
+	let mut count = 0;
+	let mut start_index = None;
 
-	let mut file_buffer_vec: Vec<u8> = vec![];
+	for (index, &byte) in data.iter().enumerate() {
+		if byte == 0 {
+			if count == 0 {
+				start_index = Some(index);
+			}
+			count += 1;
 
-	for p in packet {
-		file_buffer_vec.extend(p.bytes.clone());
+			if count >= 8 {
+				return start_index;
+			}
+		} else {
+			count = 0;
+			start_index = None;
+		}
 	}
 
-	let mut f = std::fs::File::create("output")?;
+	None
+}
+fn filename_from_timestamp() -> String {
+	let now = Local::now();
+	format!("received_file{}", now.format("%Y%m%d_%H%M%S"))
+}
+pub fn create_file_from_packets(packet: &Vec<Packet>) -> Result<(),Box<dyn Error>> {
+
+	let filename = filename_from_timestamp();
+	let mut file_buffer_vec: Vec<u8> = vec![];
+
+	for mut p in packet {
+		file_buffer_vec.extend(&p.bytes);
+	}
+	let mut f = std::fs::File::create(&filename)?;
 	f.write_all(&file_buffer_vec)?;
 
+	info!("Wrote new file {}", &filename);
 	Ok(())
 }
 

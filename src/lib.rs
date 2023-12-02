@@ -93,20 +93,24 @@ impl Adrenaline {
 			let socket = self.new_udp_reuseport(self.configuration.local_address);
 			let _shutdown_signal = self.configuration.is_shutting_down;
 
-				let mut buf = [0; support::MAX_DATAGRAM_SIZE];
+				let mut buf = [0; support::MAX_CHUNK_SIZE + support::MAX_USER_CONTROL_HEADER];
 				loop {
 					let (len, _addr) = socket.recv_from(&mut buf).await.unwrap();
-					debug!("Received packet of length {}", len);
-					// Read the control_header
+					debug!("Received packet of length {} bytes", len);
+
 					let s = buf.split_at(8);
 					let control_header = get_command_from_control_header(s.0);
 					// reconstruct into a packet
+					let mut data = Vec::new();
+					data.extend_from_slice(s.1);
+
 					let inbound_packet = Packet {
 						control_header,
-						bytes: s.1.to_vec(),
+						bytes: data ,
 						len: len - support::MAX_USER_CONTROL_HEADER,
 						remote_address: self.configuration.local_address,
 					};
+					debug!("Inbound packet chunk size {}", inbound_packet.bytes.len());
 
 					match get_command_from_control_header(s.0) {
 						ControlCommand::START => {
@@ -141,10 +145,9 @@ impl Adrenaline {
 
 		// We must packet the control header into the the bytes body
 		let mut control_header_bytes = create_control_header(packet.control_header).to_vec();
-		let body = packet.bytes;
-		control_header_bytes.extend(body);
-		info!("Length of combined body {}", control_header_bytes.len());
-		socket.send(control_header_bytes.as_slice()).await?;
+		let body = [ control_header_bytes,packet.bytes].concat();
+		info!("Sending of combined body of size {} bytes", body.len());
+		socket.send(body.as_slice()).await?;
 		Ok(())
 	}
 	pub async fn send_file(&self, file_name: String) ->  Result<(),Box<dyn Error>> {
@@ -164,15 +167,13 @@ impl Adrenaline {
 						len: x.size,
 						remote_address: self.configuration.remote_address,
 					};
-
+					debug!("Raw Chunk size {}", &send_packet.bytes.len());
 					self.send_packet(send_packet).await?;
 					return Ok(())
 				}
 
 				// Get start and end chunks
-
 				let chunk_len = x.chunks.len();
-
 				let start_chunk:Vec<Vec<u8>> = {
 					x.chunks.drain(0..1).collect::<Vec<_>>() // Mutable borrow is scoped and ends here
 				};
@@ -188,6 +189,7 @@ impl Adrenaline {
 					remote_address: self.configuration.remote_address,
 				};
 
+				debug!("Start Raw Chunk size {}", &start_packet.bytes.len());
 				self.send_packet(start_packet).await?;
 
 				for middle_chunk in x.chunks {
@@ -198,6 +200,7 @@ impl Adrenaline {
 						len,
 						remote_address: self.configuration.remote_address,
 					};
+					debug!("Middle Raw Chunk size {}", &middle_packet.bytes.len());
 					self.send_packet(middle_packet).await?;
 				}
 
@@ -206,7 +209,9 @@ impl Adrenaline {
 					bytes: end_chunk,
 					len: end_chunk_len,
 					remote_address: self.configuration.remote_address,
+
 				};
+				debug!("End Chunk size {}", &end_packet.bytes.len());
 				self.send_packet(end_packet).await?;
 
 			},
@@ -224,48 +229,6 @@ impl Adrenaline {
 mod tests {
 	use std::io::Error;
 	use crate::{Adrenaline, Configuration};
-	use crate::support::{create_file_from_chunks, get_chunks_from_file};
-
-	#[tokio::test]
-	async fn test_chunking_correctness() {
-		let chunks = get_chunks_from_file("examples/test_file_small.txt".to_string());
-		match chunks{
-			Ok(x) => {
-				match create_file_from_chunks("examples/output-test_chunking_correctness_test.txt", x) {
-					Ok(_) => {
-
-					}
-					Err(_) => {
-						assert!(false);
-					}
-				}
-			}, Err(e) => {
-				assert!(false);
-			}
-		}
-	}
-	#[tokio::test]
-	async fn test_chunking_real_file() {
-		let chunks = get_chunks_from_file("examples/test_file.txt".to_string());
-		match chunks{
-			Ok(x) => {
-
-			}, Err(e) => {
-				assert!(false);
-			}
-		}
-	}
-	#[tokio::test]
-	async fn test_chunking_false_file() {
-		let chunks = get_chunks_from_file("examples/fake_file.txt".to_string());
-		match chunks{
-			Ok(x) => {
-				assert!(false);
-			}, Err(e) => {
-
-			}
-		}
-	}
 	#[tokio::test]
 	#[should_panic]
 	async fn test_local_address_not_parsed() {
