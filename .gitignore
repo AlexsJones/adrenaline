@@ -2,3 +2,4 @@ examples/output*
 .idea
 /target
 /Cargo.lock
+downloads

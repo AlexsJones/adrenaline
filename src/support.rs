@@ -1,11 +1,12 @@
 use std::error::Error;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
-use std::io;
-use std::slice::Chunks;
+use std::{fs, io};
+
 use chrono::Local;
 
-use log::{debug, info};
+
+
 use crate::Packet;
 
 const UDP_HEADER: usize = 8;
@@ -88,22 +89,24 @@ fn find_eight_consecutive_nulls(data: &Vec<u8>) -> Option<usize> {
 
 	None
 }
-fn filename_from_timestamp() -> String {
+fn timestamp() -> String {
 	let now = Local::now();
-	format!("received_file{}", now.format("%Y%m%d_%H%M%S"))
+	format!("{}", now.format("%Y%m%d_%H%M%S"))
 }
 pub fn create_file_from_packets(packet: &Vec<Packet>) -> Result<(),Box<dyn Error>> {
 
-	let filename = filename_from_timestamp();
+	fs::create_dir_all("downloads")?;
+	let filename = format!("downloads/{}",timestamp());
+
 	let mut file_buffer_vec: Vec<u8> = vec![];
 
-	for mut p in packet {
+	for p in packet {
 		file_buffer_vec.extend(&p.bytes);
 	}
 	let mut f = std::fs::File::create(&filename)?;
 	f.write_all(&file_buffer_vec)?;
 
-	info!("Wrote new file {}", &filename);
+	println!("Wrote new file {}", &filename);
 	Ok(())
 }
 

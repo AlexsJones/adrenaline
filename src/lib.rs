@@ -10,33 +10,26 @@ use crate::support::{ControlCommand, create_control_header, create_file_from_pac
 pub struct Configuration {
 	local_address: SocketAddr,
 	remote_address: SocketAddr,
-	is_shutting_down: bool,
 }
 
 impl Configuration {
 
-	pub fn shutdown(&mut self) {
-		self.is_shutting_down = true;
-	}
 	pub fn new_with_local_address(local_address: &str) -> Self {
 		Self {
 			local_address: local_address.parse().unwrap(),
 			remote_address: "0.0.0.0:0".parse().unwrap(),
-			is_shutting_down: false,
 		}
 	}
 	pub fn new_with_remote_address(remote_address: &str) -> Self {
 		Self {
 			local_address: "0.0.0.0:0".parse().unwrap(),
 			remote_address: remote_address.parse().unwrap(),
-			is_shutting_down: false,
 		}
 	}
 	pub fn new_with_addresses(local_address: &str, remote_address: &str) -> Self {
 		Self {
 			local_address: local_address.parse().unwrap(),
 			remote_address: remote_address.parse().unwrap(),
-			is_shutting_down: false,
 		}
 	}
 }
@@ -91,7 +84,6 @@ impl Adrenaline {
 	) {
 
 			let socket = self.new_udp_reuseport(self.configuration.local_address);
-			let _shutdown_signal = self.configuration.is_shutting_down;
 
 				let mut buf = [0; support::MAX_CHUNK_SIZE + support::MAX_USER_CONTROL_HEADER];
 				loop {
@@ -144,7 +136,7 @@ impl Adrenaline {
 		socket.connect(&self.configuration.remote_address).await?;
 
 		// We must packet the control header into the the bytes body
-		let mut control_header_bytes = create_control_header(packet.control_header).to_vec();
+		let control_header_bytes = create_control_header(packet.control_header).to_vec();
 		let body = [ control_header_bytes,packet.bytes].concat();
 		info!("Sending of combined body of size {} bytes", body.len());
 		socket.send(body.as_slice()).await?;
