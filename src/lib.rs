@@ -59,7 +59,7 @@ impl Adrenaline {
 			buffer: vec![],
 		}
 	}
-	pub fn new_udp_reuseport(&self, local_addr: SocketAddr) -> UdpSocket {
+	pub fn new_udp_reuse_port(&self, local_addr: SocketAddr) -> UdpSocket {
 		let udp_sock = socket2::Socket::new(
 			if local_addr.is_ipv4() {
 				socket2::Domain::IPV4
@@ -83,7 +83,7 @@ impl Adrenaline {
 		_callback: fn(packet: Packet) -> Option<Vec<u8>>,
 	) {
 
-			let socket = self.new_udp_reuseport(self.configuration.local_address);
+			let socket = self.new_udp_reuse_port(self.configuration.local_address);
 
 				let mut buf = [0; support::MAX_CHUNK_SIZE + support::MAX_USER_CONTROL_HEADER];
 				loop {
@@ -106,22 +106,22 @@ impl Adrenaline {
 
 					match get_command_from_control_header(s.0) {
 						ControlCommand::START => {
-							info!("Found flow control Start");
+							debug!("Found flow control Start");
 							self.buffer.clear();
 							self.buffer.push(inbound_packet);
 						}
 						ControlCommand::CONTINUE => {
-							info!("Found flow control Continue");
+							debug!("Found flow control Continue");
 							self.buffer.push(inbound_packet);
 						}
 						ControlCommand::SINGLE_UNIT => {
-							info!("Found flow control Single Unit");
+							debug!("Found flow control Single Unit");
 							self.buffer.clear();
 							self.buffer.push(inbound_packet);
 							create_file_from_packets(&self.buffer);
 						}
 						ControlCommand::END => {
-							info!("Found flow control End");
+							debug!("Found flow control End");
 							self.buffer.push(inbound_packet);
 							create_file_from_packets(&self.buffer);
 						}
@@ -138,7 +138,7 @@ impl Adrenaline {
 		// We must packet the control header into the the bytes body
 		let control_header_bytes = create_control_header(packet.control_header).to_vec();
 		let body = [ control_header_bytes,packet.bytes].concat();
-		info!("Sending of combined body of size {} bytes", body.len());
+		debug!("Sending of combined body of size {} bytes", body.len());
 		socket.send(body.as_slice()).await?;
 		Ok(())
 	}
@@ -219,18 +219,18 @@ impl Adrenaline {
 
 #[cfg(test)]
 mod tests {
-	use std::io::Error;
+	
 	use crate::{Adrenaline, Configuration};
 	#[tokio::test]
 	#[should_panic]
 	async fn test_local_address_not_parsed() {
 		let conf = Configuration::new_with_local_address("");
-		let adrenaline = Adrenaline::new(conf);
+		let _adrenaline = Adrenaline::new(conf);
 	}
 	#[tokio::test]
 	#[should_panic]
 	async fn test_remote_address_not_parsed() {
 		let conf = Configuration::new_with_remote_address("");
-		let adrenaline = Adrenaline::new(conf);
+		let _adrenaline = Adrenaline::new(conf);
 	}
 }

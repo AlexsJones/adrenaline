@@ -1,4 +1,4 @@
-use std::time::{Duration, SystemTime};
+
 use log::warn;
 
 use tokio;
@@ -13,7 +13,7 @@ async fn main() {
 
 	let response = ad.send_file("examples/image.png".to_string()).await;
 	match response {
-		Ok(x) => {
+		Ok(_x) => {
 			println!("Message sent successfully!");
 		},
 		Err(e) => {
